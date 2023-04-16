@@ -50,7 +50,7 @@ impl Tpm2Packet {
         };
         let (input, payload_size_bytes) = take(2usize)(input)?;
         let payload_size = ((payload_size_bytes[0] as u16) << 8) | (payload_size_bytes[1] as u16);
-        if payload_size < 1 || payload_size > 65535 {
+        if payload_size < 1 {
             return Err(nom::Err::Failure(make_error(input, ErrorKind::Verify)));
         }
         let (input, user_data) = take(payload_size)(input)?;
