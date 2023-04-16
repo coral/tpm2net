@@ -12,7 +12,7 @@ pub struct Tpm2NetPacket<'a> {
 impl<'a> Tpm2NetPacket<'a> {
     fn parse_packet(input: &'a [u8]) -> nom::IResult<&'a [u8], Tpm2NetPacket<'a>> {
         let (input, _) = nom::bytes::complete::tag(&[0x9C])(input)?;
-        //let (input, packet_type) = PacketType::parse(input)?;
+        let (input, packet_type) = PacketType::parse(input)?;
         let (input, frame_size) = nom::number::complete::be_u16(input)?;
         let (input, packet_number) = nom::number::complete::be_u8(input)?;
         let (input, num_packets) = nom::number::complete::be_u8(input)?;
@@ -31,11 +31,12 @@ impl<'a> Tpm2NetPacket<'a> {
         ))
     }
 
-    pub fn parse(input: &'a [u8]) -> Result<(&'a [u8], Tpm2NetPacket<'a>), nom::Err<nom::error::Error<&'a [u8]>>> {
-        Tpm2NetPacket::parse_packet(input)
-            .map_err(|e| match e {
-                nom::Err::Incomplete(_) => nom::Err::Incomplete(nom::Needed::Unknown),
-                nom::Err::Error(err) | nom::Err::Failure(err) => nom::Err::Error(err),
-            })
+    pub fn parse(
+        input: &'a [u8],
+    ) -> Result<(&'a [u8], Tpm2NetPacket<'a>), nom::Err<nom::error::Error<&'a [u8]>>> {
+        Tpm2NetPacket::parse_packet(input).map_err(|e| match e {
+            nom::Err::Incomplete(_) => nom::Err::Incomplete(nom::Needed::Unknown),
+            nom::Err::Error(err) | nom::Err::Failure(err) => nom::Err::Error(err),
+        })
     }
 }

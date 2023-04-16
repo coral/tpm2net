@@ -1,9 +1,8 @@
+use super::packet_type::PacketType;
 use nom::{
     bytes::complete::{tag, take},
-    error::{make_error, ErrorKind},
     number::streaming::be_u16,
 };
-use super::packet_type::PacketType;
 
 #[allow(unused)]
 #[derive(Debug)]
@@ -15,6 +14,7 @@ pub struct Packet {
     end_byte: u8,
 }
 
+#[allow(dead_code)]
 impl Packet {
     pub fn new(packet_type: PacketType, user_data: Vec<u8>) -> Self {
         let payload_size = user_data.len() as u16;
@@ -34,13 +34,7 @@ impl Packet {
 
     pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Packet> {
         let (input, _) = tag(&[0xC9])(input)?;
-        let (input, packet_type_byte) = take(1usize)(input)?;
-        let packet_type = match packet_type_byte[0] {
-            0xDA => PacketType::DataFrame,
-            0xC0 => PacketType::Command,
-            0xAA => PacketType::RequestedResponse,
-            _ => return Err(nom::Err::Failure(make_error(input, ErrorKind::Alt))),
-        };
+        let (input, packet_type) = PacketType::parse(input)?;
         let (input, payload_size) = be_u16(input)?;
         let (input, user_data) = take(payload_size)(input)?;
         let (input, _) = tag(&[0x36])(input)?;
