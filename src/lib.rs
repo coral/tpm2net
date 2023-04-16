@@ -1,6 +1,5 @@
-mod tpm2;
-
+mod protocol;
 #[allow(unused)]
-pub use tpm2::Tpm2Packet as Packet;
+pub use protocol::tpm2::Packet as TPM2Packet;
 #[allow(unused)]
-pub use tpm2::PacketType as PacketType;
+pub use protocol::tpm2::PacketType as PacketType;

@@ -1,22 +1,13 @@
 use nom::{
     bytes::complete::{tag, take},
     error::{make_error, ErrorKind},
-    combinator::map_res,
     number::streaming::be_u16,
 };
+use super::packet_type::PacketType;
 
 #[allow(unused)]
 #[derive(Debug)]
-#[repr(u8)]
-pub enum PacketType {
-    DataFrame = 0xDA,
-    Command = 0xC0,
-    RequestedResponse = 0xAA,
-}
-
-#[allow(unused)]
-#[derive(Debug)]
-pub struct Tpm2Packet {
+pub struct Packet {
     start_byte: u8,
     packet_type: PacketType,
     payload_size: u16,
@@ -24,7 +15,7 @@ pub struct Tpm2Packet {
     end_byte: u8,
 }
 
-impl Tpm2Packet {
+impl Packet {
     pub fn new(packet_type: PacketType, user_data: Vec<u8>) -> Self {
         let payload_size = user_data.len() as u16;
         Self {
@@ -41,7 +32,7 @@ impl Tpm2Packet {
         self.user_data = new_payload;
     }
 
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Tpm2Packet> {
+    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Packet> {
         let (input, _) = tag(&[0xC9])(input)?;
         let (input, packet_type_byte) = take(1usize)(input)?;
         let packet_type = match packet_type_byte[0] {
@@ -55,7 +46,7 @@ impl Tpm2Packet {
         let (input, _) = tag(&[0x36])(input)?;
         Ok((
             input,
-            Tpm2Packet {
+            Packet {
                 start_byte: 0xC9,
                 packet_type,
                 payload_size,
@@ -80,9 +71,22 @@ impl Tpm2Packet {
     }
 }
 
+impl Into<Vec<u8>> for Packet {
+    fn into(self) -> Vec<u8> {
+        self.bytes()
+    }
+}
+
+impl<'a> TryFrom<&'a [u8]> for Packet {
+    type Error = nom::Err<nom::error::Error<&'a [u8]>>;
+    fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {
+        Self::parse(value).map(|(_, p)| p)
+    }
+}
+
 #[test]
 fn create() {
-    let p = Tpm2Packet::new(PacketType::Command, vec![128, 0, 32, 64, 255]);
+    let p = Packet::new(PacketType::Command, vec![128, 0, 32, 64, 255]);
     let comp = hex::decode("C9C0000580002040FF36").unwrap();
 
     assert_eq!(p.bytes(), comp);
@@ -90,14 +94,27 @@ fn create() {
 #[test]
 fn parse() {
     // Even length
-    let parsed = Tpm2Packet::parse(&vec![0xC9, 0xC0, 0x00, 0x04, 128, 0, 32, 64, 0x36]).unwrap().1;
-    let constructed = Tpm2Packet::new(PacketType::Command, vec![128, 0, 32, 64]);
-    
+    let parsed = Packet::parse(&vec![0xC9, 0xC0, 0x00, 0x04, 128, 0, 32, 64, 0x36])
+        .unwrap()
+        .1;
+    let constructed = Packet::new(PacketType::Command, vec![128, 0, 32, 64]);
+
     assert_eq!(parsed.bytes(), constructed.bytes());
-    
+
     // Odd length
-    let parsed = Tpm2Packet::parse(&vec![0xC9, 0xC0, 0x00, 0x05, 128, 0, 32, 64, 255, 0x36]).unwrap().1;
-    let constructed = Tpm2Packet::new(PacketType::Command, vec![128, 0, 32, 64, 255]);
-    
+    let parsed = Packet::parse(&vec![0xC9, 0xC0, 0x00, 0x05, 128, 0, 32, 64, 255, 0x36])
+        .unwrap()
+        .1;
+    let constructed = Packet::new(PacketType::Command, vec![128, 0, 32, 64, 255]);
+
     assert_eq!(parsed.bytes(), constructed.bytes());
+}
+
+#[test]
+fn change() {
+    let mut p = Packet::new(PacketType::Command, vec![0]);
+    assert_eq!(p.bytes(), vec![0xC9, 0xC0, 0x00, 0x01, 0, 0x36]);
+
+    p.update_payload(vec![0x12, 0x12]);
+    assert_eq!(p.bytes(), vec![0xC9, 0xC0, 0x00, 0x02, 0x12, 0x12, 0x36]);
 }
