@@ -1,15 +1,17 @@
 use nom::{
     bytes::complete::{tag, take},
     error::{make_error, ErrorKind},
+    combinator::map_res,
+    number::streaming::be_u16,
 };
 
 #[allow(unused)]
 #[derive(Debug)]
 #[repr(u8)]
 pub enum PacketType {
-    DataFrame,
-    Command,
-    RequestedResponse,
+    DataFrame = 0xDA,
+    Command = 0xC0,
+    RequestedResponse = 0xAA,
 }
 
 #[allow(unused)]
@@ -38,8 +40,8 @@ impl Tpm2Packet {
         self.payload_size = new_payload.len() as u16;
         self.user_data = new_payload;
     }
-    
-    pub fn parse_packet(input: &[u8]) -> nom::IResult<&[u8], Tpm2Packet> {
+
+    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Tpm2Packet> {
         let (input, _) = tag(&[0xC9])(input)?;
         let (input, packet_type_byte) = take(1usize)(input)?;
         let packet_type = match packet_type_byte[0] {
@@ -48,20 +50,19 @@ impl Tpm2Packet {
             0xAA => PacketType::RequestedResponse,
             _ => return Err(nom::Err::Failure(make_error(input, ErrorKind::Alt))),
         };
-        let (input, payload_size_bytes) = take(2usize)(input)?;
-        let payload_size = ((payload_size_bytes[0] as u16) << 8) | (payload_size_bytes[1] as u16);
-        if payload_size < 1 {
-            return Err(nom::Err::Failure(make_error(input, ErrorKind::Verify)));
-        }
+        let (input, payload_size) = be_u16(input)?;
         let (input, user_data) = take(payload_size)(input)?;
         let (input, _) = tag(&[0x36])(input)?;
-        Ok((input, Tpm2Packet {
-            start_byte: 0xC9,
-            packet_type,
-            payload_size,
-            user_data: user_data.to_vec(),
-            end_byte: 0x36,
-        }))
+        Ok((
+            input,
+            Tpm2Packet {
+                start_byte: 0xC9,
+                packet_type,
+                payload_size,
+                user_data: user_data.to_vec(),
+                end_byte: 0x36,
+            },
+        ))
     }
 
     pub fn bytes(&self) -> Vec<u8> {
@@ -77,4 +78,26 @@ impl Tpm2Packet {
         bytes.push(0x36);
         bytes
     }
+}
+
+#[test]
+fn create() {
+    let p = Tpm2Packet::new(PacketType::Command, vec![128, 0, 32, 64, 255]);
+    let comp = hex::decode("C9C0000580002040FF36").unwrap();
+
+    assert_eq!(p.bytes(), comp);
+}
+#[test]
+fn parse() {
+    // Even length
+    let parsed = Tpm2Packet::parse(&vec![0xC9, 0xC0, 0x00, 0x04, 128, 0, 32, 64, 0x36]).unwrap().1;
+    let constructed = Tpm2Packet::new(PacketType::Command, vec![128, 0, 32, 64]);
+    
+    assert_eq!(parsed.bytes(), constructed.bytes());
+    
+    // Odd length
+    let parsed = Tpm2Packet::parse(&vec![0xC9, 0xC0, 0x00, 0x05, 128, 0, 32, 64, 255, 0x36]).unwrap().1;
+    let constructed = Tpm2Packet::new(PacketType::Command, vec![128, 0, 32, 64, 255]);
+    
+    assert_eq!(parsed.bytes(), constructed.bytes());
 }

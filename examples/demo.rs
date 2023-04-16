@@ -6,4 +6,6 @@ fn main() {
     dbg!(&p);
 
     dbg!(&p.bytes());
+
+    let parsed = Packet::parse(&vec![0xC9, 0xC0, 0x00, 0x05, 128, 0, 32, 64, 255, 0x36]).unwrap().1;
 }
