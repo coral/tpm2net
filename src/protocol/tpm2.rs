@@ -4,6 +4,9 @@ use nom::{
     number::streaming::be_u16,
 };
 
+const NET_PACKET_START_BYTE: u8 = 0xC9;
+const NET_PACKET_END_BYTE: u8 = 0x36;
+
 #[allow(unused)]
 #[derive(Debug)]
 pub struct Packet {
@@ -19,11 +22,11 @@ impl Packet {
     pub fn new(packet_type: PacketType, user_data: Vec<u8>) -> Self {
         let payload_size = user_data.len() as u16;
         Self {
-            start_byte: 0xC9,
+            start_byte: NET_PACKET_START_BYTE,
             packet_type,
             payload_size,
             user_data,
-            end_byte: 0x36,
+            end_byte: NET_PACKET_END_BYTE,
         }
     }
 
@@ -33,11 +36,11 @@ impl Packet {
     }
 
     pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Packet> {
-        let (input, _) = tag(&[0xC9])(input)?;
+        let (input, _) = tag(&[NET_PACKET_START_BYTE])(input)?;
         let (input, packet_type) = PacketType::parse(input)?;
         let (input, payload_size) = be_u16(input)?;
         let (input, user_data) = take(payload_size)(input)?;
-        let (input, _) = tag(&[0x36])(input)?;
+        let (input, _) = tag(&[NET_PACKET_END_BYTE])(input)?;
         Ok((
             input,
             Packet {

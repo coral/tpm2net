@@ -1,6 +1,6 @@
 use nom::{number::streaming::be_u8, IResult};
 #[allow(unused)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[repr(u8)]
 
 pub enum PacketType {
